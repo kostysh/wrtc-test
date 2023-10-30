@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import './App.css';
 import QR from 'qrcode';
 import QrReader from 'react-qr-reader';
+import { compress, decompress } from 'lzutf8';
 import { useWrtc, type WrtcPeer } from './hooks/useWrtc';
 
 function App() {
@@ -12,12 +13,12 @@ function App() {
   const [error, setError] = useState<undefined | string>();
   const { connection, peer, message } = useWrtc();
 
-  const onShowQr = useCallback(() => {
+  const onShowQr = useCallback(async () => {
     if (peer) {
       setShowQr(true);
-      console.log('@@@@', peer);
+      const peerData = compress(JSON.stringify(peer), { inputEncoding: 'String', outputEncoding: 'Base64' });
       setTimeout(() => {
-        QR.toCanvas(canvasRef.current, JSON.stringify(peer), { width: 500, });
+        QR.toCanvas(canvasRef.current, peerData, { width: 500, });
       }, 1000);
     } else {
       setError('WRTC not initialized yet!');
@@ -26,17 +27,24 @@ function App() {
 
   useEffect(() => {
     if (connection && data) {
-      const remotePeer = JSON.parse(data) as WrtcPeer;
-      connection
-        .setRemoteDescription(new RTCSessionDescription(remotePeer.offer))
-        .then(() => {
-          console.log('$$$$', connection);
-          const sendChannel = connection.createDataChannel('sendWrtcDataChannel');
-          sendChannel.onopen = () => {
-            sendChannel.send('Dude!!!');
-          };
-        })
-        .catch((error) => console.log('>>>', error));
+      const onData = async () => {
+        const peerData = decompress(data, { inputEncoding: 'Base64', outputEncoding: 'String' });
+        const remotePeer = JSON.parse(peerData) as WrtcPeer;
+
+        await connection.setRemoteDescription(new RTCSessionDescription(remotePeer.offer))
+        remotePeer.candidates.forEach((candidate) => {
+          connection.addIceCandidate(new RTCIceCandidate(candidate)).catch(console.log);
+        });
+
+        console.log('$$$$ connection.iceConnectionState', connection.iceConnectionState);
+        const sendChannel = connection.createDataChannel('sendWrtcDataChannel');
+        sendChannel.onopen = () => {
+          console.log('$$$$===');
+          sendChannel.send('Dude!!!');
+        };
+      };
+
+      onData().catch(console.log);
     }
   }, [connection, data]);
 

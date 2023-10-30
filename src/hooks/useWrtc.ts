@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 
 export interface WrtcPeer {
   offer: RTCSessionDescriptionInit;
-  // candidates: RTCIceCandidateInit[];
+  candidates: RTCIceCandidateInit[];
 }
 
 export interface UseWrtcHook {
@@ -23,22 +23,25 @@ export const useWrtc = (): UseWrtcHook => {
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
     };
     const conn = new RTCPeerConnection(configuration);
-    // const candidates: RTCIceCandidateInit[] = [];
+    const candidates: RTCIceCandidateInit[] = [];
 
     conn.onicecandidate = ({ candidate }) => {
       console.log('Candidate:', candidate);
 
       if (candidate) {
-        // candidates.push(candidate.toJSON());
+        candidates.push(candidate.toJSON());
       } else {
         // All candidates have been gathered.
         setPeer({
           offer: conn.localDescription!,
-          // candidates,
+          candidates,
         });
       }
     };
 
+    conn.oniceconnectionstatechange = () => {
+      console.log('ICE Connection State change:', conn.iceConnectionState);
+    };
 
     const dataChannel = conn.createDataChannel('getWrtcDataChannel');
     dataChannel.onopen = () => {
